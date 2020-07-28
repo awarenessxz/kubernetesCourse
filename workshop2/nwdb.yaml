@@ -1,0 +1,58 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: nw-secret
+  #namespace: nw
+  labels:
+    app: northwind
+data:
+  MYSQL_ROOT_PASSWORD: Y2hhbmdlaXQ=
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nw-deploy
+  # namespace: nw (not included)
+  labels:
+    app: northwind
+spec:
+  # Because DB is stateful (doesn't make sense to have more than 1 DB)
+  replicas: 1
+  selector:
+    matchLabels:
+      app: northwind
+  template:
+    # this is basically "nw-pod.yaml" AKA telling that this is the pod to create
+    metadata:
+      name: nwdb-pod
+      labels:
+        app: northwind
+    spec:
+      containers:
+        - name: nwdb-container
+          image: dockerkoh/nwdb:v3
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - secretRef:
+                name: nw-secret # name of secret
+          ports:
+            - name: nwdb-port
+              containerPort: 3306
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nwdb-svc
+  #namespace: nw
+  labels:
+    app: northwind
+spec:
+  # ClusterIP since this is database and should be within the network (not exposed)
+  type: ClusterIP
+  selector:
+    app: northwind
+  ports:
+    - name: nwdb-svc-port
+      port: 3306
+      targetPort: nwdb-port
