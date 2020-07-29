@@ -1,0 +1,77 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nwappv2-deploy
+  #namespace: nw
+  labels:
+    app: northwind
+    label: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nwappv2-pod
+  template:
+    metadata:
+      name: nwappv2-pod
+      labels:
+        app: nwappv2-pod
+    spec:
+      containers:
+        - name: nwappv2-container
+          image: stackupiss/northwind-app:v2
+          envFrom:
+            - configMapRef:
+                name: nwapp-cm
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: nw-secret
+                  key: MYSQL_ROOT_PASSWORD
+            - name: INSTANCE_IP_ADDRESS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: nwappv2-port
+              containerPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nwappv2-svc
+  #namespace: nw
+  labels:
+    app: northwind
+spec:
+  type: ClusterIP
+  selector:
+    # this selector refers to the pod
+    app: nwappv2-pod
+  ports:
+    - name: nwa2-svc-port
+      port: 3000
+      targetPort: nwappv2-port
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: nwappv2-ing
+  labels:
+    app: northwind
+  # we have two nwapp running, one of it must be canary
+  annotations:
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "50"
+spec:
+  rules:
+    - host: nwapp.167.172.5.33.nip.io
+      http:
+        paths:
+          - path: /
+            backend:
+              serviceName: nwappv2-svc
+              servicePort: nwa2-svc-port
